@@ -18,10 +18,6 @@
 
 #### psql --host=localhost --port=5432 --dbname=birds_db --username=ornithologist --password --file='sql/queries/bird_colors.sql'
 
-Вычислить статистические данные о птицах:
-
-#### psql --host=localhost --port=5432 --dbname=birds_db --username=ornithologist --password --file='sql/queries/birds_stat.sql'
-
 Для того чтобы запустить сервер, вам необходимо выполнить:
 #### virtualenv birds
 #### source birds/bin/activate

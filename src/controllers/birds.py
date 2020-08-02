@@ -4,6 +4,7 @@ import psycopg2
 from flask import make_response, jsonify
 
 
+# Warning !!! Никогда не храните пароли в открытом виде, используйте переменные окружения.
 db_config = {
     'dbname': 'birds_db',
     'user': 'ornithologist',
@@ -12,20 +13,42 @@ db_config = {
 }
 
 
-def birds_controller(args):
+def handle_db_exception(func):
+
+    def inner(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except psycopg2.errors.UndefinedColumn as error:
+            return create_error_response(str(error), 422)
+        except psycopg2.Error as error:
+            return create_error_response(str(error), 500)
+    
+    return inner
+
+
+@handle_db_exception
+def get_birds_controller(args):
     invalid_param, hint = find_invalid_param(args)
     if invalid_param:
-        invalid_params_response = make_response(
-            f'Invalid {invalid_param} value {args.get(invalid_param)}. {hint}', 
-            422
-        )
-        invalid_params_response.mimetype = 'text/plain'
-        return invalid_params_response
+        return create_error_response(f'Invalid {invalid_param} value {args.get(invalid_param)}. {hint}', 422)
     with psycopg2.connect(**db_config) as conn:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             cursor.execute(form_query(args))
             birds = [map_bird_to_dict(bird) for bird in cursor.fetchall()]
             return jsonify(birds)
+
+
+@handle_db_exception
+def post_birds_controller(bird):
+    fields = ['species', 'name', 'color', 'body_length', 'wingspan']
+    if not bird or not all(field in bird for field in fields):
+        return create_error_response(f'Invalid json. Please fill all fields: {", ".join(fields)}', 422)
+    with psycopg2.connect(**db_config) as conn:
+        with conn.cursor(cursor_factory=DictCursor) as cursor:
+            query = 'INSERT INTO birds (species, name, color, body_length, wingspan) VALUES (%s, %s, %s, %s, %s);'
+            cursor.execute(query, [bird[field] for field in fields])
+            conn.commit()
+            return jsonify(bird)
 
 
 def form_query(args):
@@ -75,3 +98,9 @@ def find_invalid_param(args):
 def map_bird_to_dict(values):
     fields = ['species', 'name', 'color', 'body_length', 'wingspan']
     return {key: value for key, value in zip(fields, values)}
+
+
+def create_error_response(text, status):
+    response = make_response(text, status)
+    response.mimetype = 'text/plain'
+    return response
