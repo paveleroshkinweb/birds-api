@@ -1,6 +1,7 @@
 from contextlib import closing
 from psycopg2.extras import DictCursor
 import psycopg2
+from psycopg2.errors import UndefinedColumn, InvalidTextRepresentation, UniqueViolation
 from flask import make_response, jsonify
 
 
@@ -18,7 +19,7 @@ def handle_db_exception(func):
     def inner(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except psycopg2.errors.UndefinedColumn as error:
+        except (UndefinedColumn, InvalidTextRepresentation, UniqueViolation) as error:
             return create_error_response(str(error), 422)
         except psycopg2.Error as error:
             return create_error_response(str(error), 500)
@@ -41,8 +42,9 @@ def get_birds_controller(args):
 @handle_db_exception
 def post_birds_controller(bird):
     fields = ['species', 'name', 'color', 'body_length', 'wingspan']
-    if not bird or not all(field in bird for field in fields):
-        return create_error_response(f'Invalid json. Please fill all fields: {", ".join(fields)}', 422)
+    if not is_valid_bird(bird, fields):
+        error_msg = f'Invalid json. Please fill all fields: {", ".join(fields)}. body_length and wingspan should be positive integers'
+        return create_error_response(error_msg, 422)
     with psycopg2.connect(**db_config) as conn:
         with conn.cursor(cursor_factory=DictCursor) as cursor:
             query = 'INSERT INTO birds (species, name, color, body_length, wingspan) VALUES (%s, %s, %s, %s, %s);'
@@ -104,3 +106,7 @@ def create_error_response(text, status):
     response = make_response(text, status)
     response.mimetype = 'text/plain'
     return response
+
+
+def is_valid_bird(bird, fields):
+    return bird and all(field in bird for field in fields) and bird['body_length'] > 0 and bird['wingspan'] > 0

@@ -24,3 +24,6 @@
 #### pip install -r requirements.txt
 #### chmod a+x api.py
 #### ./api.py
+
+Для запуска тестов выполните
+#### python api_tests.py
